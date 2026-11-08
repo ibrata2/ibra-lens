@@ -1,0 +1,129 @@
+name: Build & Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  models:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache models
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: models-${{ hashFiles('tools/export_models.py') }}
+      - uses: actions/setup-python@v5
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          python-version: "3.11"
+      - name: Export AI models to ONNX
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p logs
+          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu 2>&1 | tee logs/models-pip.txt
+          pip install --quiet "transformers>=4.44,<5" "sentence-transformers>=3,<6" onnx onnxruntime tokenizers 2>&1 | tee -a logs/models-pip.txt
+          python tools/export_models.py models 2>&1 | tee logs/models-export.txt
+      - name: Upload models
+        uses: actions/upload-artifact@v4
+        with:
+          name: models
+          path: models
+          retention-days: 3
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-models
+          path: logs
+          if-no-files-found: ignore
+
+  build:
+    needs: models
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Version
+        id: ver
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          if [[ ! "$V" =~ ^[0-9]+\.[0-9]+ ]]; then V="0.0.0"; fi
+          echo "v=$V" >> $GITHUB_OUTPUT
+          sed -i "s/^VERSION = .*/VERSION = \"$V\"/" ibralens/paths.py
+          grep VERSION ibralens/paths.py
+      - name: Install
+        run: |
+          New-Item -ItemType Directory -Force logs | Out-Null
+          python -m pip install --upgrade pip 2>&1 | Out-Null
+          pip install -r requirements.txt pyinstaller 2>&1 | Tee-Object -FilePath logs/build-pip.txt
+      - name: PyInstaller
+        run: |
+          pyinstaller --noconfirm --windowed --name "IBRA LENS" --icon ibralens/assets/icon.ico `
+            --add-data "ibralens/assets;assets" --collect-binaries onnxruntime --collect-data onnxruntime `
+            --collect-submodules ibralens --collect-submodules pillow_heif run.py 2>&1 | Tee-Object -FilePath logs/pyinstaller.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: models
+          path: dist/IBRA LENS/models
+      - name: Self-test (models + Arabic search)
+        run: |
+          Get-ChildItem "dist/IBRA LENS/models" | Format-Table Name, Length | Out-String | Tee-Object -FilePath logs/models-list.txt
+          $p = Start-Process -FilePath "dist\IBRA LENS\IBRA LENS.exe" -ArgumentList '--selftest', "$PWD\logs\selftest.txt" -Wait -PassThru
+          Get-Content logs/selftest.txt -Encoding UTF8
+          if ($p.ExitCode -ne 0) { throw "selftest failed ($($p.ExitCode))" }
+      - name: Installer
+        run: |
+          choco install innosetup -y --no-progress 2>&1 | Out-Null
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.v }} installer\ibra-lens.iss 2>&1 | Tee-Object -FilePath logs/inno.txt
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+          Get-ChildItem Output
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: Output/*.exe
+          retention-days: 7
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Output/*.exe
+          name: IBRA LENS ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-build
+          path: logs
+          if-no-files-found: ignore
+
+  report:
+    needs: [models, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: logs-*
+          path: logs
+          merge-multiple: true
+      - name: Publish CI logs as a release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "models=${{ needs.models.result }} build=${{ needs.build.result }} ref=${{ github.ref_name }}" > logs/summary.txt
+          tar czf ci-logs.tgz logs || true
+          gh release view ci-logs -R ${{ github.repository }} >/dev/null 2>&1 || \
+            gh release create ci-logs -R ${{ github.repository }} --prerelease --title "CI logs" --notes "Build logs (automatic)."
+          gh release upload ci-logs ci-logs.tgz -R ${{ github.repository }} --clobber
