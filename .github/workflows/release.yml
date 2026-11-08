@@ -1,8 +1,10 @@
 name: Build & Release
 
+# كل رفع على main يبني المنصّب وينشره بالـ Releases باسم الإصدار المكتوب بـ ibralens/paths.py
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths-ignore: ["README.md", ".gitignore"]
   workflow_dispatch:
 
 permissions:
@@ -56,11 +58,9 @@ jobs:
         id: ver
         shell: bash
         run: |
-          V="${GITHUB_REF_NAME#v}"
-          if [[ ! "$V" =~ ^[0-9]+\.[0-9]+ ]]; then V="0.0.0"; fi
+          V=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' ibralens/paths.py)
           echo "v=$V" >> $GITHUB_OUTPUT
-          sed -i "s/^VERSION = .*/VERSION = \"$V\"/" ibralens/paths.py
-          grep VERSION ibralens/paths.py
+          echo "version $V"
       - name: Install
         run: |
           New-Item -ItemType Directory -Force logs | Out-Null
@@ -94,11 +94,14 @@ jobs:
           path: Output/*.exe
           retention-days: 7
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           files: Output/*.exe
-          name: IBRA LENS ${{ github.ref_name }}
+          tag_name: v${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          name: IBRA LENS v${{ steps.ver.outputs.v }}
           body_path: RELEASE_NOTES.md
       - name: Upload logs
         if: always()
