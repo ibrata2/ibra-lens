@@ -84,6 +84,7 @@ jobs:
       - name: Installer
         run: |
           choco install innosetup -y --no-progress 2>&1 | Out-Null
+          try { Invoke-WebRequest "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/Arabic.isl" -OutFile installer\Arabic.isl } catch { Write-Host "Arabic.isl not available" }
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.v }} installer\ibra-lens.iss 2>&1 | Tee-Object -FilePath logs/inno.txt
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
           Get-ChildItem Output
@@ -128,5 +129,5 @@ jobs:
           echo "models=${{ needs.models.result }} build=${{ needs.build.result }} ref=${{ github.ref_name }}" > logs/summary.txt
           tar czf ci-logs.tgz logs || true
           gh release view ci-logs -R ${{ github.repository }} >/dev/null 2>&1 || \
-            gh release create ci-logs -R ${{ github.repository }} --prerelease --title "CI logs" --notes "Build logs (automatic)."
+            gh release create ci-logs -R ${{ github.repository }} --draft --title "CI logs" --notes "Build logs (automatic)."
           gh release upload ci-logs ci-logs.tgz -R ${{ github.repository }} --clobber

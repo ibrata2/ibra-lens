@@ -33,8 +33,16 @@ CloseApplications=yes
 RestartApplications=no
 DiskSpanning=no
 
+ShowLanguageDialog=yes
+
 [Languages]
+#ifexist AddBackslash(SourcePath) + "Arabic.isl"
+Name: "arabic"; MessagesFile: "Arabic.isl"
+#endif
 Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[INI]
+Filename: "{app}\defaults.ini"; Section: "app"; Key: "lang"; String: "{language}"; Flags: uninsdeletesection
 
 [Tasks]
 Name: "desktopicon"; Description: "Desktop shortcut / اختصار على سطح المكتب"; GroupDescription: "Shortcuts:"

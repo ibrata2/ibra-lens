@@ -23,6 +23,21 @@ from .engine import create_engine, models_present, open_image
 from .indexer import Indexer, list_drives
 from .paths import APP_NAME, VERSION, asset, data_dir
 from .settings import Settings
+from .i18n import T, set_lang, is_rtl, lang
+
+
+def DIR():
+    return Qt.RightToLeft if is_rtl() else Qt.LeftToRight
+
+
+def restart_app():
+    from PySide6.QtCore import QProcess
+    if getattr(sys, "frozen", False):
+        QProcess.startDetached(sys.executable, [])
+    else:
+        QProcess.startDetached(sys.executable, [os.path.abspath(sys.argv[0])])
+    QApplication.quit()
+
 
 ACCENT = "#ff3b48"
 CREDIT = "برمجة و تطوير ابراهيم الخزرجي"
@@ -43,7 +58,7 @@ QPushButton:disabled {{ color: #6d6d78; }}
 QPushButton#primary {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #ff4b57, stop:1 #b3101d);
                        border: 1px solid rgba(255,255,255,0.25); font-weight: 700; }}
 QPushButton#primary:hover {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #ff6670, stop:1 #c8182a); }}
-QPushButton#nav {{ text-align: right; padding: 12px 18px; border-radius: 12px; background: transparent;
+QPushButton#nav {{ text-align: %ALIGN%; padding: 12px 18px; border-radius: 12px; background: transparent;
                    border: 1px solid transparent; font-size: 15px; }}
 QPushButton#nav:hover {{ background: rgba(255,255,255,0.07); }}
 QPushButton#nav:checked {{ background: rgba(255,59,72,0.22); border: 1px solid rgba(255,59,72,0.55); font-weight: 700; }}
@@ -86,7 +101,7 @@ def human_size(n):
     n = float(n or 0)
     for u in ("بايت", "KB", "MB", "GB", "TB"):
         if n < 1024:
-            return f"{n:.0f} {u}" if u == "بايت" else f"{n:.1f} {u}"
+            return f"{n:.0f} {T(u)}" if u == "بايت" else f"{n:.1f} {u}"
         n /= 1024
     return f"{n:.1f} PB"
 
@@ -245,7 +260,7 @@ class CardDelegate(QStyledItemDelegate):
             p.setClipping(False)
         elif pm is not None:
             p.setPen(QColor("#777"))
-            p.drawText(tr, Qt.AlignCenter, "تعذر العرض")
+            p.drawText(tr, Qt.AlignCenter, T("تعذر العرض"))
 
         # شارة النسبة
         sc = d.get("score")
@@ -282,10 +297,10 @@ class CardDelegate(QStyledItemDelegate):
     def badge(self, sc):
         if self.mode_fn() == "image":
             if sc >= 0.965:
-                return "مطابقة", "#1f9d55"
+                return T("مطابقة"), "#1f9d55"
             if sc >= 0.88:
-                return f"قريبة جداً {sc*100:.0f}%", "#c27c0e"
-            return f"مشابهة {sc*100:.0f}%", "#b3101d"
+                return T("قريبة جداً {p}%").format(p=f"{sc*100:.0f}"), "#c27c0e"
+            return T("مشابهة {p}%").format(p=f"{sc*100:.0f}"), "#b3101d"
         pct = max(1, min(99, int((sc - 0.12) / 0.22 * 100)))
         return f"{pct}%", "#b3101d"
 
@@ -300,7 +315,7 @@ class ResultsView(QListView):
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setMouseTracking(True)
         self.setSpacing(2)
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(DIR())
         self.model_ = ResultModel(thumbs)
         self.setModel(self.model_)
         self.setItemDelegate(CardDelegate(thumbs, mode_fn))
@@ -332,14 +347,14 @@ class SearchPage(QWidget):
         top = QHBoxLayout()
         self.q = QLineEdit()
         self.q.setObjectName("search")
-        self.q.setPlaceholderText("اكتب شنو تريد تلكى…  مثل: طفل، وشم، سيارة، بحر، ورد")
+        self.q.setPlaceholderText(T("اكتب شنو تريد تلكى…  مثل: طفل، وشم، سيارة، بحر، ورد"))
         self.q.returnPressed.connect(self.do_text)
-        b = QPushButton("بحث")
+        b = QPushButton(T("بحث"))
         b.setObjectName("primary")
         b.clicked.connect(self.do_text)
-        bi = QPushButton("🖼  بحث بصورة")
+        bi = QPushButton(T("🖼  بحث بصورة"))
         bi.clicked.connect(self.pick_image)
-        bi.setToolTip("ارفع صورة أو اسحبها هنا حتى يلكي مثيلها بالحاسبة")
+        bi.setToolTip(T("ارفع صورة أو اسحبها هنا حتى يلكي مثيلها بالحاسبة"))
         top.addWidget(self.q, 1)
         top.addWidget(b)
         top.addWidget(bi)
@@ -353,7 +368,7 @@ class SearchPage(QWidget):
         self.qthumb = QLabel()
         self.qthumb.setFixedSize(54, 54)
         self.qlabel = QLabel()
-        x = QPushButton("✕ إلغاء")
+        x = QPushButton(T("✕ إلغاء"))
         x.clicked.connect(self.clear_image)
         qb.addWidget(self.qthumb)
         qb.addWidget(self.qlabel, 1)
@@ -365,7 +380,7 @@ class SearchPage(QWidget):
         self.info = QLabel("")
         self.info.setObjectName("hint")
         row.addWidget(self.info, 1)
-        row.addWidget(QLabel("عدد النتائج:"))
+        row.addWidget(QLabel(T("عدد النتائج:")))
         self.count = QComboBox()
         for n in (100, 300, 600, 1000):
             self.count.addItem(str(n), n)
@@ -390,9 +405,9 @@ class SearchPage(QWidget):
 
     def show_empty(self, text=None):
         self.empty.setText(text or (
-            "<div style='font-size:42px'>🔎</div>"
-            "<div style='font-size:18px;font-weight:700;color:#fff'>اكتب وصف الصورة أو اسحب صورة هنا</div>"
-            "<div>البرنامج يفهم شنو موجود داخل الصورة — عربي أو إنكليزي</div>"))
+            "<div style='font-size:42px'>🔎</div>" +
+            T("<div style='font-size:18px;font-weight:700;color:#fff'>اكتب وصف الصورة أو اسحب صورة هنا</div>") +
+            T("<div>البرنامج يفهم شنو موجود داخل الصورة — عربي أو إنكليزي</div>")))
         self.stack.setCurrentIndex(0)
 
     # -------------------------------------------------- drag & drop
@@ -415,8 +430,8 @@ class SearchPage(QWidget):
 
     # -------------------------------------------------- actions
     def pick_image(self):
-        p, _ = QFileDialog.getOpenFileName(self, "اختار صورة", "",
-                                           "صور (*.jpg *.jpeg *.png *.webp *.bmp *.gif *.tif *.tiff *.heic *.jfif)")
+        p, _ = QFileDialog.getOpenFileName(self, T("اختار صورة"), "",
+                                           T("صور (*.jpg *.jpeg *.png *.webp *.bmp *.gif *.tif *.tiff *.heic *.jfif)"))
         if p:
             self.search_image(p)
 
@@ -437,11 +452,11 @@ class SearchPage(QWidget):
 
     def ready(self):
         if self.win.engine is None:
-            self.info.setText("الذكاء الاصطناعي بعده يتحمّل… لحظات")
+            self.info.setText(T("الذكاء الاصطناعي بعده يتحمّل… لحظات"))
             return False
         if self.win.db.count() == 0:
-            self.show_empty("<div style='font-size:42px'>📂</div><div style='font-size:17px;color:#fff'>"
-                            "بعد ما فهرسنا الصور.</div><div>روح لصفحة <b>الفهرسة</b> واضغط <b>ابدأ الفهرسة</b> أول مرة.</div>")
+            self.show_empty("<div style='font-size:42px'>📂</div><div style='font-size:17px;color:#fff'>" +
+                            T("بعد ما فهرسنا الصور.</div><div>روح لصفحة <b>الفهرسة</b> واضغط <b>ابدأ الفهرسة</b> أول مرة.</div>"))
             return False
         return True
 
@@ -455,7 +470,7 @@ class SearchPage(QWidget):
         t = time.time()
         vec = self.win.engine.embed_text(q)
         res = self.win.db.search(vec, top=self.count.currentData())
-        self.show_results(res, f"نتائج «{q}» — {len(res)} صورة ({time.time()-t:.2f} ث)")
+        self.show_results(res, T("نتائج «{q}» — {n} صورة ({t} ث)").format(q=q, n=len(res), t=f"{time.time()-t:.2f}"))
 
     def search_image(self, path):
         if not self.ready():
@@ -463,7 +478,7 @@ class SearchPage(QWidget):
         try:
             im = open_image(path, max_side=1024)
         except Exception:
-            QMessageBox.warning(self, APP_NAME, "ما كدرت أفتح هاي الصورة.")
+            QMessageBox.warning(self, APP_NAME, T("ما كدرت أفتح هاي الصورة."))
             return
         self.mode = "image"
         self.query_image = path
@@ -473,13 +488,13 @@ class SearchPage(QWidget):
             pm = QPixmap.fromImage(QImage(data.tobytes("raw", "RGBA"), data.width, data.height,
                                           QImage.Format_RGBA8888).copy())
         self.qthumb.setPixmap(pm.scaled(54, 54, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        self.qlabel.setText(f"البحث عن مثيل: <b>{os.path.basename(path)}</b>")
+        self.qlabel.setText(T("البحث عن مثيل:") + f" <b>{os.path.basename(path)}</b>")
         self.qbar.show()
         t = time.time()
         vec = self.win.engine.embed_image(im)
         res = self.win.db.search(vec, top=self.count.currentData())
         same = sum(1 for d in res if d["score"] >= 0.965)
-        self.show_results(res, f"{same} مطابقة • {len(res)} نتيجة مرتبة من الأقرب ({time.time()-t:.2f} ث)")
+        self.show_results(res, T("{a} مطابقة • {n} نتيجة مرتبة من الأقرب ({t} ث)").format(a=same, n=len(res), t=f"{time.time()-t:.2f}"))
 
     def show_results(self, res, msg):
         self.view.model_.set_items(res)
@@ -488,7 +503,7 @@ class SearchPage(QWidget):
         if res:
             self.stack.setCurrentIndex(1)
         else:
-            self.show_empty("ما لكيت نتائج")
+            self.show_empty(T("ما لكيت نتائج"))
 
     def menu(self, pos):
         sel = self.view.selected()
@@ -496,18 +511,18 @@ class SearchPage(QWidget):
             return
         d = sel[0]
         m = QMenu(self)
-        m.setLayoutDirection(Qt.RightToLeft)
-        m.addAction("فتح الصورة", lambda: open_file(d["path"]))
-        m.addAction("📁 فتح مكانها", lambda: open_location(d["path"]))
-        m.addAction("نسخ المسار", lambda: QApplication.clipboard().setText("\n".join(x["path"] for x in sel)))
-        m.addAction("نسخ الصورة", lambda: QApplication.clipboard().setImage(QImage(d["path"])))
-        m.addAction("🔎 بحث عن صور مشابهة", lambda: self.search_image(d["path"]))
+        m.setLayoutDirection(DIR())
+        m.addAction(T("فتح الصورة"), lambda: open_file(d["path"]))
+        m.addAction(T("📁 فتح مكانها"), lambda: open_location(d["path"]))
+        m.addAction(T("نسخ المسار"), lambda: QApplication.clipboard().setText("\n".join(x["path"] for x in sel)))
+        m.addAction(T("نسخ الصورة"), lambda: QApplication.clipboard().setImage(QImage(d["path"])))
+        m.addAction(T("🔎 بحث عن صور مشابهة"), lambda: self.search_image(d["path"]))
         m.addSeparator()
-        m.addAction(f"🗑 حذف ({len(sel)}) إلى سلة المحذوفات", lambda: self.delete(sel))
+        m.addAction(T("🗑 حذف ({n}) إلى سلة المحذوفات").format(n=len(sel)), lambda: self.delete(sel))
         m.exec(self.view.viewport().mapToGlobal(pos))
 
     def delete(self, sel):
-        if QMessageBox.question(self, APP_NAME, f"تنقل {len(sel)} صورة لسلة المحذوفات؟") != QMessageBox.Yes:
+        if QMessageBox.question(self, APP_NAME, T("تنقل {n} صورة لسلة المحذوفات؟").format(n=len(sel))) != QMessageBox.Yes:
             return
         ok = to_trash([d["path"] for d in sel])
         self.win.db.remove_paths(ok)
@@ -525,8 +540,8 @@ class DupGroup(QFrame):
         lay.setContentsMargins(12, 10, 12, 10)
         hdr = QHBoxLayout()
         allexact = all(d["exact"] for d in self.items)
-        t = QLabel(f"<b>مجموعة {n}</b> — {len(self.items)} صور • "
-                   f"{'متطابقة تماماً' if allexact else 'متشابهة'} • توفير {human_size(g['waste'])}")
+        t = QLabel(T("<b>مجموعة {n}</b> — {c} صور • {kind} • توفير {w}").format(
+            n=n, c=len(self.items), kind=T("متطابقة تماماً") if allexact else T("متشابهة"), w=human_size(g['waste'])))
         hdr.addWidget(t, 1)
         lay.addLayout(hdr)
         sc = QScrollArea()
@@ -555,14 +570,14 @@ class DupGroup(QFrame):
             th.setToolTip(d["path"])
             v.addWidget(th)
             self.thumbs.append((th, d["path"]))
-            cb = QCheckBox("الأفضل — نخليها" if i == 0 else "حذف")
+            cb = QCheckBox(T("الأفضل — نخليها") if i == 0 else T("حذف"))
             cb.setChecked(i != 0)
             self.checks.append(cb)
             v.addWidget(cb)
             nm = QLabel(f"{d['w']}×{d['h']} • {human_size(d['size'])}")
             nm.setObjectName("hint")
             v.addWidget(nm)
-            loc = QPushButton("📁 مكانها")
+            loc = QPushButton(T("📁 مكانها"))
             loc.setStyleSheet("padding: 4px 8px; border-radius: 8px; font-size: 12px;")
             loc.setToolTip(d["path"])
             loc.clicked.connect(lambda _=False, p=d["path"]: open_location(p))
@@ -581,7 +596,7 @@ class DupGroup(QFrame):
         if not pm.isNull():
             th.setPixmap(pm.scaled(th.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
-            th.setText("تعذر العرض")
+            th.setText(T("تعذر العرض"))
 
     def _thumb(self, path):
         for th, p in self.thumbs:
@@ -606,15 +621,15 @@ class DupPage(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(22, 20, 22, 12)
         lay.setSpacing(12)
-        t = QLabel("الصور المكررة")
+        t = QLabel(T("الصور المكررة"))
         t.setObjectName("title")
         lay.addWidget(t)
         row = QHBoxLayout()
         self.mode = QComboBox()
-        self.mode.addItem("متشابهة (تشمل المصغرة والمضغوطة ونسخ الواتساب)", "similar")
-        self.mode.addItem("متطابقة تماماً فقط (نفس الملف)", "exact")
+        self.mode.addItem(T("متشابهة (تشمل المصغرة والمضغوطة ونسخ الواتساب)"), "similar")
+        self.mode.addItem(T("متطابقة تماماً فقط (نفس الملف)"), "exact")
         row.addWidget(self.mode, 1)
-        b = QPushButton("ابحث عن المكرر")
+        b = QPushButton(T("ابحث عن المكرر"))
         b.setObjectName("primary")
         b.clicked.connect(self.run)
         row.addWidget(b)
@@ -623,7 +638,7 @@ class DupPage(QWidget):
         self.info = QLabel("")
         self.info.setObjectName("hint")
         row2.addWidget(self.info, 1)
-        self.delbtn = QPushButton("🗑 حذف المحدد إلى سلة المحذوفات")
+        self.delbtn = QPushButton(T("🗑 حذف المحدد إلى سلة المحذوفات"))
         self.delbtn.clicked.connect(self.delete)
         self.delbtn.setEnabled(False)
         row2.addWidget(self.delbtn)
@@ -636,16 +651,16 @@ class DupPage(QWidget):
         self.vl.addStretch(1)
         self.scroll.setWidget(self.inner)
         lay.addWidget(self.scroll, 1)
-        self.more = QPushButton("عرض المزيد")
+        self.more = QPushButton(T("عرض المزيد"))
         self.more.clicked.connect(self.show_more)
         self.more.hide()
         lay.addWidget(self.more)
 
     def run(self):
         if self.win.db.count() == 0:
-            self.info.setText("لازم تفهرس الصور أول (صفحة الفهرسة).")
+            self.info.setText(T("لازم تفهرس الصور أول (صفحة الفهرسة)."))
             return
-        self.info.setText("جاري البحث عن المكرر…")
+        self.info.setText(T("جاري البحث عن المكرر…"))
         QApplication.processEvents()
         self.groups = find_duplicates(self.win.db, self.mode.currentData(), self.win.s.get("dup_threshold", 5))
         for w in self.widgets:
@@ -655,8 +670,8 @@ class DupPage(QWidget):
         self.shown = 0
         n = sum(len(g["items"]) - 1 for g in self.groups)
         waste = sum(g["waste"] for g in self.groups)
-        self.info.setText(f"{len(self.groups)} مجموعة • {n} نسخة زايدة • تكدر توفر {human_size(waste)}"
-                          if self.groups else "ماكو صور مكررة 👌")
+        self.info.setText(T("{g} مجموعة • {n} نسخة زايدة • تكدر توفر {w}").format(g=len(self.groups), n=n, w=human_size(waste))
+                          if self.groups else T("ماكو صور مكررة 👌"))
         self.delbtn.setEnabled(bool(self.groups))
         self.show_more()
 
@@ -672,12 +687,11 @@ class DupPage(QWidget):
         paths = [p for w in self.widgets for p in w.marked()]
         if not paths:
             return
-        if QMessageBox.question(self, APP_NAME, f"تنقل {len(paths)} صورة مكررة لسلة المحذوفات؟\n"
-                                "(تكدر ترجعها من السلة إذا احتجتها)") != QMessageBox.Yes:
+        if QMessageBox.question(self, APP_NAME, T("تنقل {n} صورة مكررة لسلة المحذوفات؟\n(تكدر ترجعها من السلة إذا احتجتها)").format(n=len(paths))) != QMessageBox.Yes:
             return
         ok = to_trash(paths)
         self.win.db.remove_paths(ok)
-        QMessageBox.information(self, APP_NAME, f"انحذفت {len(ok)} صورة.")
+        QMessageBox.information(self, APP_NAME, T("انحذفت {n} صورة.").format(n=len(ok)))
         self.run()
 
 
@@ -689,25 +703,25 @@ class IndexPage(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(22, 20, 22, 12)
         lay.setSpacing(12)
-        t = QLabel("الفهرسة")
+        t = QLabel(T("الفهرسة"))
         t.setObjectName("title")
         lay.addWidget(t)
-        h = QLabel("البرنامج يمر على الأماكن المحددة ويحفظ بصمة لكل صورة. أول مرة تاخذ وقت، "
-                   "وبعدها يحدّث بس الصور الجديدة والمعدلة.")
+        h = QLabel(T("البرنامج يمر على الأماكن المحددة ويحفظ بصمة لكل صورة. أول مرة تاخذ وقت، ") +
+                   T("وبعدها يحدّث بس الصور الجديدة والمعدلة."))
         h.setObjectName("hint")
         h.setWordWrap(True)
         lay.addWidget(h)
 
         c = card()
         cl = QVBoxLayout(c)
-        cl.addWidget(QLabel("<b>أماكن البحث</b>"))
+        cl.addWidget(QLabel(T("<b>أماكن البحث</b>")))
         self.list = QListWidget()
         self.list.setMinimumHeight(170)
         cl.addWidget(self.list)
         br = QHBoxLayout()
-        add = QPushButton("+ إضافة مجلد")
+        add = QPushButton(T("+ إضافة مجلد"))
         add.clicked.connect(self.add_folder)
-        rem = QPushButton("حذف المحدد")
+        rem = QPushButton(T("حذف المحدد"))
         rem.clicked.connect(self.remove_folder)
         br.addWidget(add)
         br.addWidget(rem)
@@ -718,14 +732,14 @@ class IndexPage(QWidget):
         c2 = card()
         g = QVBoxLayout(c2)
         btns = QHBoxLayout()
-        self.start = QPushButton("▶ ابدأ الفهرسة")
+        self.start = QPushButton(T("▶ ابدأ الفهرسة"))
         self.start.setObjectName("primary")
         self.start.clicked.connect(self.run)
-        self.pause = QPushButton("⏸ إيقاف مؤقت")
+        self.pause = QPushButton(T("⏸ إيقاف مؤقت"))
         self.pause.clicked.connect(self.toggle_pause)
-        self.stopb = QPushButton("⏹ إيقاف")
+        self.stopb = QPushButton(T("⏹ إيقاف"))
         self.stopb.clicked.connect(lambda: self.win.indexer and self.win.indexer.stop())
-        self.rebuild = QPushButton("إعادة بناء الفهرس من الصفر")
+        self.rebuild = QPushButton(T("إعادة بناء الفهرس من الصفر"))
         self.rebuild.clicked.connect(self.do_rebuild)
         for b in (self.start, self.pause, self.stopb):
             btns.addWidget(b)
@@ -756,7 +770,7 @@ class IndexPage(QWidget):
         self.list.clear()
         roots = self.win.s.get("roots") or []
         for d in list_drives():
-            it = QListWidgetItem(f"💽  القرص {d}")
+            it = QListWidgetItem("💽  " + T("القرص") + f" {d}")
             it.setData(Qt.UserRole, d)
             it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
             it.setCheckState(Qt.Checked if (not roots or d in roots) else Qt.Unchecked)
@@ -778,7 +792,7 @@ class IndexPage(QWidget):
         return out
 
     def add_folder(self):
-        d = QFileDialog.getExistingDirectory(self, "اختار مجلد")
+        d = QFileDialog.getExistingDirectory(self, T("اختار مجلد"))
         if d:
             d = os.path.normpath(d)
             it = QListWidgetItem(f"📁  {d}")
@@ -800,11 +814,11 @@ class IndexPage(QWidget):
 
     def run(self):
         if self.win.engine is None:
-            self.status.setText("الذكاء الاصطناعي بعده يتحمّل… جرب بعد لحظات.")
+            self.status.setText(T("الذكاء الاصطناعي بعده يتحمّل… جرب بعد لحظات."))
             return
         roots = self.roots()
         if not roots:
-            self.status.setText("حدد مكان واحد على الأقل.")
+            self.status.setText(T("حدد مكان واحد على الأقل."))
             return
         self.save_roots()
         self.win.start_index(roots)
@@ -812,12 +826,12 @@ class IndexPage(QWidget):
     def toggle_pause(self):
         if self.win.indexer and self.win.indexer.running:
             p = self.win.indexer.toggle_pause()
-            self.pause.setText("▶ استئناف" if p else "⏸ إيقاف مؤقت")
+            self.pause.setText(T("▶ استئناف") if p else T("⏸ إيقاف مؤقت"))
 
     def do_rebuild(self):
         if self.win.indexer and self.win.indexer.running:
             return
-        if QMessageBox.question(self, APP_NAME, "تمسح الفهرس الحالي وتبدي من جديد؟") == QMessageBox.Yes:
+        if QMessageBox.question(self, APP_NAME, T("تمسح الفهرس الحالي وتبدي من جديد؟")) == QMessageBox.Yes:
             self.win.db.clear()
             self.refresh_stats()
             self.run()
@@ -828,31 +842,28 @@ class IndexPage(QWidget):
         self.pause.setEnabled(on)
         self.stopb.setEnabled(on)
         if not on:
-            self.pause.setText("⏸ إيقاف مؤقت")
+            self.pause.setText(T("⏸ إيقاف مؤقت"))
 
     def refresh_stats(self):
-        self.stats.setText(f"بالفهرس: {self.win.db.count():,} صورة • {human_size(self.win.db.total_size())}"
-                           f" • المعالج: {self.win.engine.device if self.win.engine else '…'}")
+        self.stats.setText(T("بالفهرس: {n} صورة • {s} • المعالج: {d}").format(n=f"{self.win.db.count():,}", s=human_size(self.win.db.total_size()), d=self.win.engine.device if self.win.engine else '…'))
 
     def progress(self, st):
         ph = st.get("phase")
         if ph == "scan":
             self.bar.setRange(0, 0)
-            self.status.setText(f"🔍 جاري البحث عن الصور… لكيت {st['found']:,} صورة "
-                                f"({st['todo']:,} جديدة/معدلة) • {st['scanned_dirs']:,} مجلد")
+            self.status.setText(T("🔍 جاري البحث عن الصور… لكيت {f} صورة ({t} جديدة/معدلة) • {d} مجلد").format(f=f"{st['found']:,}", t=f"{st['todo']:,}", d=f"{st['scanned_dirs']:,}"))
         elif ph == "index":
             self.bar.setRange(0, max(1, st["todo"]))
             self.bar.setValue(st["done"])
             rate = st.get("rate", 0)
             left = (st["todo"] - st["done"]) / rate if rate > 0 else 0
-            eta = f" • باقي تقريباً {int(left//60)} د {int(left%60)} ث" if rate > 0 else ""
-            self.status.setText(f"🧠 فهرسة {st['done']:,} / {st['todo']:,} • {rate:.0f} صورة/ث{eta}"
-                                f" • صغيرة متروكة {st['skipped']:,} • تالفة {st['errors']:,}")
+            eta = T(" • باقي تقريباً {m} د {s} ث").format(m=int(left//60), s=int(left%60)) if rate > 0 else ""
+            self.status.setText(T("🧠 فهرسة {d} / {t} • {r} صورة/ث{eta} • صغيرة متروكة {s} • تالفة {e}").format(d=f"{st['done']:,}", t=f"{st['todo']:,}", r=f"{rate:.0f}", eta=eta, s=f"{st['skipped']:,}", e=f"{st['errors']:,}"))
         elif ph in ("done", "stopped"):
             self.bar.setRange(0, 100)
             self.bar.setValue(100 if ph == "done" else self.bar.value())
-            self.status.setText(("✅ خلصت الفهرسة" if ph == "done" else "⏹ توقفت الفهرسة") +
-                                f" • جديد {st['done'] - st['skipped'] - st['errors']:,} • محذوف من الحاسبة {st['removed']:,}")
+            self.status.setText((T("✅ خلصت الفهرسة") if ph == "done" else T("⏹ توقفت الفهرسة")) +
+                                T(" • جديد {n} • محذوف من الحاسبة {r}").format(n=f"{st['done'] - st['skipped'] - st['errors']:,}", r=f"{st['removed']:,}"))
             self.set_running(False)
         self.cur.setText(st.get("current", "") if ph not in ("done", "stopped") else "")
         self.refresh_stats()
@@ -867,39 +878,46 @@ class SettingsPage(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(22, 20, 22, 12)
         lay.setSpacing(12)
-        t = QLabel("الإعدادات")
+        t = QLabel(T("الإعدادات"))
         t.setObjectName("title")
         lay.addWidget(t)
         c = card()
         g = QGridLayout(c)
         g.setHorizontalSpacing(16)
         g.setVerticalSpacing(12)
-        self.gpu = QCheckBox("استخدم كارت الشاشة (أسرع) — يتطبق بعد إعادة التشغيل")
+        self.gpu = QCheckBox(T("استخدم كارت الشاشة (أسرع) — يتطبق بعد إعادة التشغيل"))
         self.gpu.setChecked(s["use_gpu"])
         g.addWidget(self.gpu, 0, 0, 1, 2)
-        self.auto = QCheckBox("حدّث الفهرس تلقائياً عند فتح البرنامج")
+        self.auto = QCheckBox(T("حدّث الفهرس تلقائياً عند فتح البرنامج"))
         self.auto.setChecked(s["auto_update_index"])
         g.addWidget(self.auto, 1, 0, 1, 2)
-        self.upd = QCheckBox("بلغني إذا نزل إصدار جديد من البرنامج")
+        self.upd = QCheckBox(T("بلغني إذا نزل إصدار جديد من البرنامج"))
         self.upd.setChecked(s["check_updates"])
         g.addWidget(self.upd, 2, 0, 1, 2)
-        g.addWidget(QLabel("تجاهل الصور الأصغر من (KB):"), 3, 0)
+        g.addWidget(QLabel(T("تجاهل الصور الأصغر من (KB):")), 3, 0)
         self.minkb = QSpinBox()
         self.minkb.setRange(0, 5000)
         self.minkb.setValue(s["min_kb"])
         g.addWidget(self.minkb, 3, 1)
-        g.addWidget(QLabel("تجاهل الصور اللي أصغر ضلع بيها أقل من (بكسل) — الأيقونات:"), 4, 0)
+        g.addWidget(QLabel(T("تجاهل الصور اللي أصغر ضلع بيها أقل من (بكسل) — الأيقونات:")), 4, 0)
         self.minside = QSpinBox()
         self.minside.setRange(0, 2000)
         self.minside.setValue(s["min_side"])
         g.addWidget(self.minside, 4, 1)
-        g.addWidget(QLabel("دقة كشف المتشابهة (أقل = أدق، أكثر = يلكي تعديلات أكبر):"), 5, 0)
+        g.addWidget(QLabel(T("دقة كشف المتشابهة (أقل = أدق، أكثر = يلكي تعديلات أكبر):")), 5, 0)
         self.thr = QSpinBox()
         self.thr.setRange(0, 12)
         self.thr.setValue(s["dup_threshold"])
         g.addWidget(self.thr, 5, 1)
+        g.addWidget(QLabel(T("لغة البرنامج:")), 6, 0)
+        self.lang = QComboBox()
+        self.lang.addItem("العربية", "ar")
+        self.lang.addItem("English", "en")
+        self.lang.setCurrentIndex(0 if lang() == "ar" else 1)
+        self.lang.currentIndexChanged.connect(lambda _: win.change_lang(self.lang.currentData()))
+        g.addWidget(self.lang, 6, 1)
         lay.addWidget(c)
-        sv = QPushButton("حفظ")
+        sv = QPushButton(T("حفظ"))
         sv.setObjectName("primary")
         sv.clicked.connect(self.save)
         r = QHBoxLayout()
@@ -914,16 +932,16 @@ class SettingsPage(QWidget):
         top = QHBoxLayout()
         top.addWidget(logo)
         nm = QLabel(f"<div style='font-size:22px;font-weight:800'>{APP_NAME}</div>"
-                    f"<div style='color:#a9a9b5'>الإصدار {VERSION} — البحث الذكي عن الصور</div>"
-                    f"<div style='margin-top:6px'>{CREDIT}</div>")
+                    "<div style='color:#a9a9b5'>" + T("الإصدار {v} — البحث الذكي عن الصور").format(v=VERSION) + "</div>"
+                    f"<div style='margin-top:6px'>{T(CREDIT)}</div>")
         top.addWidget(nm, 1)
         al.addLayout(top)
         links = QHBoxLayout()
-        for txt, url in (("تليكرام t.me/ibraprogram", TELEGRAM), ("تيك توك @ibraprogram", TIKTOK)):
+        for txt, url in ((T("تليكرام t.me/ibraprogram"), TELEGRAM), (T("تيك توك @ibraprogram"), TIKTOK)):
             b = QPushButton(txt)
             b.clicked.connect(lambda _=False, u=url: QDesktopServices.openUrl(QUrl(u)))
             links.addWidget(b)
-        cu = QPushButton("فحص التحديثات")
+        cu = QPushButton(T("فحص التحديثات"))
         cu.clicked.connect(lambda: win.check_updates(manual=True))
         links.addWidget(cu)
         links.addStretch(1)
@@ -940,7 +958,7 @@ class SettingsPage(QWidget):
         s["min_side"] = self.minside.value()
         s["dup_threshold"] = self.thr.value()
         s.save()
-        QMessageBox.information(self, APP_NAME, "انحفظت الإعدادات.")
+        QMessageBox.information(self, APP_NAME, T("انحفظت الإعدادات."))
 
 
 # ====================================================================== main window
@@ -966,13 +984,13 @@ class MainWindow(QMainWindow):
         self.br.engine_ready.connect(self._engine_ready)
         self.br.update_found.connect(self._update_found)
         self.br.update_none.connect(lambda m: QMessageBox.information(self, APP_NAME, m))
-        self.br.dl_progress.connect(lambda v: self.upd_btn.setText(f"جاري التنزيل {v}%"))
+        self.br.dl_progress.connect(lambda v: self.upd_btn.setText(T("جاري التنزيل {v}%").format(v=v)))
         self.br.dl_done.connect(self._dl_done)
 
-        self.setWindowTitle(f"{APP_NAME} — البحث الذكي عن الصور")
+        self.setWindowTitle(f"{APP_NAME} — " + T("البحث الذكي عن الصور"))
         self.setWindowIcon(QIcon(asset("icon.ico")))
         self.resize(1280, 820)
-        self.setLayoutDirection(Qt.RightToLeft)
+        self.setLayoutDirection(DIR())
 
         root = QWidget()
         root.setObjectName("root")
@@ -994,7 +1012,7 @@ class MainWindow(QMainWindow):
         b.setObjectName("brand")
         b.setAlignment(Qt.AlignCenter)
         sl.addWidget(b)
-        sb = QLabel("البحث الذكي عن الصور")
+        sb = QLabel(T("البحث الذكي عن الصور"))
         sb.setObjectName("sub")
         sb.setAlignment(Qt.AlignCenter)
         sl.addWidget(sb)
@@ -1006,8 +1024,8 @@ class MainWindow(QMainWindow):
         self.index = IndexPage(self)
         self.settings = SettingsPage(self)
         grp = QButtonGroup(self)
-        for i, (txt, page) in enumerate((("🔎  البحث", self.search), ("🧬  الصور المكررة", self.dups),
-                                         ("📂  الفهرسة", self.index), ("⚙  الإعدادات وحول", self.settings))):
+        for i, (txt, page) in enumerate(((T("🔎  البحث"), self.search), (T("🧬  الصور المكررة"), self.dups),
+                                         (T("📂  الفهرسة"), self.index), (T("⚙  الإعدادات وحول"), self.settings))):
             self.pages.addWidget(page)
             nb = QPushButton(txt)
             nb.setObjectName("nav")
@@ -1017,12 +1035,16 @@ class MainWindow(QMainWindow):
             grp.addButton(nb)
             sl.addWidget(nb)
         sl.addStretch(1)
+        lb = QPushButton("🌐  English" if is_rtl() else "🌐  العربية")
+        lb.setToolTip("تغيير اللغة / Change language")
+        lb.clicked.connect(lambda: self.change_lang("en" if is_rtl() else "ar"))
+        sl.addWidget(lb)
         self.upd_btn = QPushButton("")
         self.upd_btn.setObjectName("primary")
         self.upd_btn.hide()
         self.upd_btn.clicked.connect(self._do_update)
         sl.addWidget(self.upd_btn)
-        cr = QLabel(f"{CREDIT}<br><a style='color:#ff6b75' href='{TELEGRAM}'>t.me/ibraprogram</a>")
+        cr = QLabel(f"{T(CREDIT)}<br><a style='color:#ff6b75' href='{TELEGRAM}'>t.me/ibraprogram</a>")
         cr.setObjectName("sub")
         cr.setAlignment(Qt.AlignCenter)
         cr.setWordWrap(True)
@@ -1032,7 +1054,7 @@ class MainWindow(QMainWindow):
         h.addWidget(side)
         h.addWidget(self.pages, 1)
         self.setCentralWidget(root)
-        self.statusBar().showMessage("جاري تحميل الذكاء الاصطناعي…")
+        self.statusBar().showMessage(T("جاري تحميل الذكاء الاصطناعي…"))
         self._update = None
         self.pending_query = None
         threading.Thread(target=self._load_engine, daemon=True).start()
@@ -1053,13 +1075,13 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------- engine
     def _load_engine(self):
         if not models_present():
-            self.br.engine_ready.emit(None, "ملفات الذكاء الاصطناعي ناقصة — أعد تنصيب البرنامج.")
+            self.br.engine_ready.emit(None, T("ملفات الذكاء الاصطناعي ناقصة — أعد تنصيب البرنامج."))
             return
         try:
             eng = create_engine(self.s.get("use_gpu", True))
             self.br.engine_ready.emit(eng, "")
         except Exception as ex:
-            self.br.engine_ready.emit(None, f"تعذر تشغيل الذكاء الاصطناعي: {ex}")
+            self.br.engine_ready.emit(None, T("تعذر تشغيل الذكاء الاصطناعي:") + f" {ex}")
 
     def _engine_ready(self, eng, err):
         if eng is None:
@@ -1068,7 +1090,7 @@ class MainWindow(QMainWindow):
             return
         self.engine = eng
         n = self.db.count()
-        self.statusBar().showMessage(f"جاهز • {eng.device} • بالفهرس {n:,} صورة")
+        self.statusBar().showMessage(T("جاهز • {d} • بالفهرس {n} صورة").format(d=eng.device, n=f"{n:,}"))
         self.index.refresh_stats()
         if self.pending_query and n:
             self.search.search_image(self.pending_query)
@@ -1088,17 +1110,17 @@ class MainWindow(QMainWindow):
         self.index.set_running(True)
         self.indexer.start(roots)
         if not quiet:
-            self.statusBar().showMessage("بدأت الفهرسة…")
+            self.statusBar().showMessage(T("بدأت الفهرسة…"))
 
     def _progress(self, st):
         self.index.progress(st)
         ph = st.get("phase")
         if ph == "index":
-            self.statusBar().showMessage(f"تحديث الفهرس: {st['done']:,} / {st['todo']:,}")
+            self.statusBar().showMessage(T("تحديث الفهرس:") + f" {st['done']:,} / {st['todo']:,}")
         elif ph == "scan":
-            self.statusBar().showMessage(f"فحص الملفات… {st['found']:,} صورة")
+            self.statusBar().showMessage(T("فحص الملفات… {n} صورة").format(n=f"{st['found']:,}"))
         elif ph in ("done", "stopped"):
-            self.statusBar().showMessage(f"جاهز • {self.engine.device} • بالفهرس {self.db.count():,} صورة")
+            self.statusBar().showMessage(T("جاهز • {d} • بالفهرس {n} صورة").format(d=self.engine.device, n=f"{self.db.count():,}"))
             if self.search.stack.currentIndex() == 0 and self.db.count():
                 self.search.show_empty()
 
@@ -1110,22 +1132,22 @@ class MainWindow(QMainWindow):
                 if r:
                     self.br.update_found.emit(r)
                 elif manual:
-                    self.br.update_none.emit("عندك آخر إصدار 👍")
+                    self.br.update_none.emit(T("عندك آخر إصدار 👍"))
             except Exception:
                 if manual:
-                    self.br.update_none.emit("ما كدرت أتصل بالإنترنت لفحص التحديثات.")
+                    self.br.update_none.emit(T("ما كدرت أتصل بالإنترنت لفحص التحديثات."))
         threading.Thread(target=work, daemon=True).start()
 
     def _update_found(self, r):
         self._update = r
-        self.upd_btn.setText(f"⬆ تحديث إلى {r[0]}")
+        self.upd_btn.setText(T("⬆ تحديث إلى") + f" {r[0]}")
         self.upd_btn.show()
 
     def _do_update(self):
         if not self._update:
             return
         tag, url, size, notes = self._update
-        if QMessageBox.question(self, APP_NAME, f"نزل إصدار جديد {tag}\n\n{notes[:600]}\n\nتنزله وتنصبه هسه؟") != QMessageBox.Yes:
+        if QMessageBox.question(self, APP_NAME, T("نزل إصدار جديد") + f" {tag}\n\n{notes[:600]}\n\n" + T("تنزله وتنصبه هسه؟")) != QMessageBox.Yes:
             return
         self.upd_btn.setEnabled(False)
 
@@ -1140,11 +1162,23 @@ class MainWindow(QMainWindow):
     def _dl_done(self, path):
         if not path:
             self.upd_btn.setEnabled(True)
-            self.upd_btn.setText("⬆ إعادة محاولة التحديث")
+            self.upd_btn.setText(T("⬆ إعادة محاولة التحديث"))
             return
         if self.indexer:
             self.indexer.stop()
         updater.install(path)
+
+    def change_lang(self, lg):
+        if lg == lang():
+            return
+        self.s["lang"] = lg
+        self.s.save()
+        set_lang(lg)  # الرسالة باللغة الجديدة
+        r = QMessageBox.question(self, APP_NAME, T("تتغير اللغة بعد إعادة تشغيل البرنامج. تعيد التشغيل هسه؟"))
+        if r == QMessageBox.Yes:
+            if self.indexer:
+                self.indexer.stop()
+            restart_app()
 
     def closeEvent(self, e):
         if self.indexer:
@@ -1159,10 +1193,11 @@ def run():
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ibrata2.ibralens")
         except Exception:
             pass
+    set_lang(Settings().get("lang", "ar"))
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
-    app.setLayoutDirection(Qt.RightToLeft)
-    app.setStyleSheet(QSS)
+    app.setLayoutDirection(DIR())
+    app.setStyleSheet(QSS.replace("%ALIGN%", "right" if is_rtl() else "left"))
     app.setWindowIcon(QIcon(asset("icon.ico")))
     w = MainWindow()
     w.show()

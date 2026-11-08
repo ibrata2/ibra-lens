@@ -2,7 +2,7 @@ import os
 import sys
 
 APP_NAME = "IBRA LENS"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 REPO = "ibrata2/ibra-lens"
 
 
