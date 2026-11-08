@@ -79,7 +79,7 @@ torch.onnx.export(
 
 from onnxruntime.quantization import quantize_dynamic, QuantType
 txt_path = os.path.join(OUT, "text.onnx")
-quantize_dynamic(txt_path_fp32, txt_path, weight_type=QuantType.QInt8, per_channel=True)
+quantize_dynamic(txt_path_fp32, txt_path, weight_type=QuantType.QInt8)
 os.remove(txt_path_fp32)
 for f in os.listdir(OUT):
     if f.endswith(".data"):

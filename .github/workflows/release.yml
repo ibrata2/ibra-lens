@@ -27,7 +27,9 @@ jobs:
           python-version: "3.11"
       - name: Export AI models to ONNX
         if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
         run: |
+          set -eo pipefail
           mkdir -p logs
           pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu 2>&1 | tee logs/models-pip.txt
           pip install --quiet "transformers>=4.44,<5" "sentence-transformers>=3,<6" onnx onnxruntime tokenizers 2>&1 | tee -a logs/models-pip.txt
@@ -84,7 +86,10 @@ jobs:
       - name: Installer
         run: |
           choco install innosetup -y --no-progress 2>&1 | Out-Null
-          try { Invoke-WebRequest "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/Arabic.isl" -OutFile installer\Arabic.isl } catch { Write-Host "Arabic.isl not available" }
+          $own = "C:\Program Files (x86)\Inno Setup 6\Languages\Arabic.isl"
+          if (Test-Path $own) { Copy-Item $own installer\Arabic.isl }
+          else { Invoke-WebRequest "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Arabic.isl" -OutFile installer\Arabic.isl }
+          if (!(Test-Path installer\Arabic.isl)) { throw "Arabic.isl missing" }
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.v }} installer\ibra-lens.iss 2>&1 | Tee-Object -FilePath logs/inno.txt
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
           Get-ChildItem Output
